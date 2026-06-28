@@ -69,6 +69,9 @@ Installation:
 4. Adds a reversible Claude status-line wrapper when Claude is selected.
 5. Registers a LaunchAgent that opens SwiftBar at login.
 
+The installed entry is named `ai-usage-tracker.5m.sh`, so it can run alongside
+another SwiftBar plugin named `ai-usage.5m.sh` without replacing or stopping it.
+
 ## Claude Status-Line Integration
 
 Claude Code sends quota data to local status-line commands after normal responses.

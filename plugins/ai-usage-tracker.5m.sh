@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 # <xbar.title>AI Usage Tracker</xbar.title>
-# <xbar.version>v0.1.0</xbar.version>
+# <xbar.version>v0.1.1</xbar.version>
 # <xbar.author>Adam Thiriot</xbar.author>
 # <xbar.author.github>athiriot</xbar.author.github>
 # <xbar.desc>Shows Codex and Claude quota and local usage estimates.</xbar.desc>

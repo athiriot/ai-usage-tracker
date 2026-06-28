@@ -10,7 +10,7 @@ import {
   symlinkSync,
   writeFileSync
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
@@ -41,6 +41,16 @@ function commandPath(command) {
 function readJson(path, fallback = null) {
   if (!existsSync(path)) return fallback;
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function entryExists(path) {
+  try {
+    lstatSync(path);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
 }
 
 function shellQuote(value) {
@@ -123,11 +133,11 @@ function installDependencies(env) {
 
 function installPlugin(pluginDirectory) {
   mkdirSync(pluginDirectory, { recursive: true });
-  const source = join(projectRoot, "plugins", "ai-usage.5m.sh");
-  const target = join(pluginDirectory, "ai-usage.5m.sh");
+  const source = join(projectRoot, "plugins", "ai-usage-tracker.5m.sh");
+  const target = join(pluginDirectory, "ai-usage-tracker.5m.sh");
   chmodSync(source, 0o755);
   let backupPath = null;
-  if (existsSync(target)) {
+  if (entryExists(target)) {
     const current = lstatSync(target);
     if (current.isSymbolicLink() && resolve(dirname(target), readlinkSync(target)) === source) {
       return { source, target, backupPath };
@@ -137,6 +147,17 @@ function installPlugin(pluginDirectory) {
   }
   symlinkSync(source, target);
   return { source, target, backupPath };
+}
+
+function removeLegacyProjectPlugin(pluginDirectory) {
+  const legacyTarget = join(pluginDirectory, "ai-usage.5m.sh");
+  if (!entryExists(legacyTarget) || !lstatSync(legacyTarget).isSymbolicLink()) return false;
+  const linkTarget = resolve(dirname(legacyTarget), readlinkSync(legacyTarget));
+  const projectPluginDirectory = join(projectRoot, "plugins");
+  if (dirname(linkTarget) !== projectPluginDirectory) return false;
+  if (!["ai-usage.5m.sh", "ai-usage-tracker.5m.sh"].includes(basename(linkTarget))) return false;
+  rmSync(legacyTarget);
+  return true;
 }
 
 function writeUserConfig(providers, env) {
@@ -231,7 +252,9 @@ export async function install(argv = process.argv.slice(2), env = process.env) {
   const providers = await chooseProviders(options);
   await ensureSwiftBar(options, env);
   installDependencies(env);
-  const plugin = installPlugin(options.pluginDir || configuredPluginDir(env));
+  const pluginDirectory = options.pluginDir || configuredPluginDir(env);
+  removeLegacyProjectPlugin(pluginDirectory);
+  const plugin = installPlugin(pluginDirectory);
   const userConfigPath = writeUserConfig(providers, env);
   const nodePath = process.execPath;
   if (providers.includes("claude")) installClaudeStatusLine(nodePath, env);
@@ -246,6 +269,9 @@ export async function install(argv = process.argv.slice(2), env = process.env) {
     pluginPath: plugin.target,
     pluginSource: plugin.source,
     pluginBackupPath: plugin.backupPath || previousState.pluginBackupPath || null,
+    pluginBackupTargetPath: plugin.backupPath
+      ? plugin.target
+      : previousState.pluginBackupTargetPath || (previousState.pluginBackupPath ? previousState.pluginPath : null),
     launchAgentPath: agentPath
   };
   writeJsonAtomic(installStatePath(env), state);
@@ -264,8 +290,9 @@ export function uninstall({ purge = false } = {}, env = process.env) {
       && resolve(dirname(state.pluginPath), readlinkSync(state.pluginPath)) === state.pluginSource;
     if (pointsToProject) rmSync(state.pluginPath);
   }
-  if (state.pluginBackupPath && existsSync(state.pluginBackupPath) && state.pluginPath && !existsSync(state.pluginPath)) {
-    renameSync(state.pluginBackupPath, state.pluginPath);
+  const backupTarget = state.pluginBackupTargetPath || state.pluginPath;
+  if (state.pluginBackupPath && existsSync(state.pluginBackupPath) && backupTarget && !entryExists(backupTarget)) {
+    renameSync(state.pluginBackupPath, backupTarget);
   }
 
   const agentPath = state.launchAgentPath || launchAgentPath(env);

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -10,6 +10,9 @@ test("installer supports both providers and uninstall restores Claude settings",
   const plugins = join(home, "swiftbar-plugins");
   const claudeDir = join(home, ".claude");
   mkdirSync(claudeDir, { recursive: true });
+  mkdirSync(plugins, { recursive: true });
+  const existingPlugin = join(plugins, "ai-usage.5m.sh");
+  writeFileSync(existingPlugin, "#!/bin/zsh\necho existing tracker\n");
   const original = { type: "command", command: "/bin/cat", padding: 2 };
   writeFileSync(join(claudeDir, "settings.json"), `${JSON.stringify({ statusLine: original }, null, 2)}\n`);
   const env = {
@@ -27,8 +30,9 @@ test("installer supports both providers and uninstall restores Claude settings",
   ], { encoding: "utf8", env });
   assert.equal(install.status, 0, install.stderr);
 
-  const plugin = join(plugins, "ai-usage.5m.sh");
+  const plugin = join(plugins, "ai-usage-tracker.5m.sh");
   assert.equal(lstatSync(plugin).isSymbolicLink(), true);
+  assert.equal(readFileSync(existingPlugin, "utf8"), "#!/bin/zsh\necho existing tracker\n");
   const config = JSON.parse(readFileSync(join(home, ".config", "ai-usage-tracker", "config.json"), "utf8"));
   assert.deepEqual(config.providers, { codex: true, claude: true });
   const installedSettings = JSON.parse(readFileSync(join(claudeDir, "settings.json"), "utf8"));
@@ -56,6 +60,32 @@ test("installer supports both providers and uninstall restores Claude settings",
   });
   assert.equal(uninstall.status, 0, uninstall.stderr);
   assert.equal(existsSync(plugin), false);
+  assert.equal(readFileSync(existingPlugin, "utf8"), "#!/bin/zsh\necho existing tracker\n");
   const restored = JSON.parse(readFileSync(join(claudeDir, "settings.json"), "utf8"));
   assert.deepEqual(restored.statusLine, original);
+});
+
+test("upgrade removes only the legacy symlink owned by this project", () => {
+  const home = mkdtempSync(join(tmpdir(), "ai-usage-upgrade-"));
+  const plugins = join(home, "swiftbar-plugins");
+  mkdirSync(plugins, { recursive: true });
+  const legacyPlugin = join(plugins, "ai-usage.5m.sh");
+  const oldProjectSource = new URL("../plugins/ai-usage.5m.sh", import.meta.url).pathname;
+  symlinkSync(oldProjectSource, legacyPlugin);
+  const env = {
+    ...process.env,
+    HOME: home,
+    AI_USAGE_SKIP_NPM: "1",
+    AI_USAGE_SKIP_LAUNCH: "1",
+    AI_USAGE_SKIP_PREREQUISITES: "1"
+  };
+  const install = spawnSync(process.execPath, [
+    new URL("../scripts/install.mjs", import.meta.url).pathname,
+    "--providers", "codex",
+    "--plugin-dir", plugins,
+    "--yes"
+  ], { encoding: "utf8", env });
+  assert.equal(install.status, 0, install.stderr);
+  assert.throws(() => lstatSync(legacyPlugin), { code: "ENOENT" });
+  assert.equal(lstatSync(join(plugins, "ai-usage-tracker.5m.sh")).isSymbolicLink(), true);
 });
