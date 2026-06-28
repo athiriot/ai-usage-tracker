@@ -1,0 +1,19 @@
+{
+  "providers": {
+    "codex": true,
+    "claude": false
+  },
+  "billingCycleStartDay": 1,
+  "currency": "USD",
+  "monthlyBudgetsUsd": {
+    "codex": null,
+    "claude": null
+  },
+  "codex": {
+    "dashboardUrl": "https://chatgpt.com/codex/settings/usage",
+    "manualStatusRefresh": true
+  },
+  "claude": {
+    "dashboardUrl": "https://claude.ai/settings/usage"
+  }
+}

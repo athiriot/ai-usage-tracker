@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-06-28T18:00:00.000Z",
+  "payload": {
+    "type": "token_count",
+    "info": {
+      "last_token_usage": {
+        "total_tokens": 25000
+      },
+      "model_context_window": 100000
+    },
+    "rate_limits": {
+      "plan_type": "plus",
+      "primary": {
+        "used_percent": 35,
+        "resets_at": 1782676800
+      },
+      "secondary": {
+        "used_percent": 60,
+        "resets_at": 1783108800
+      }
+    }
+  }
+}
